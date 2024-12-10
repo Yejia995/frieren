@@ -1,0 +1,50 @@
+name: Build CI
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: macos-latest
+            target: aarch64-apple-darwin
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install musl-tools
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt update
+        sudo apt install -y gcc musl-tools
+
+    - name: Cache Build
+      uses: actions/cache@v4
+      with:
+        path: target/${{ matrix.target }}
+        key: build-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@v1
+      with:
+        toolchain: nightly
+        target: ${{ matrix.target }}
+
+    - name: Build
+      run: |
+        cargo build --target ${{ matrix.target }} --release --verbose
+
+    - name: Upload to Releases
+      uses: svenstaro/upload-release-action@v2
+      with:
+        overwrite: true
+        tag: ${{ github.ref }}
+        release_name: Build CI
+        repo_token: ${{ secrets.ACCESS_TOKEN }}
+        body: "Automated release issued by Actions."
+        file: target/${{ matrix.target }}/release/frieren
+        asset_name: frieren-${{ matrix.target }}
